@@ -39,6 +39,6 @@ Vulners API key
 
 Libraries: requests, pandas, shodan, math
 
-Disclaimer
+Disclaimer:
 This tool is intended for cybersecurity research and space-sector risk analysis.
 Always ensure you have proper authorization to scan and assess external systems.

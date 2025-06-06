@@ -1,44 +1,65 @@
-Shodan-Based Risk Exposure Framework (REF)
-This repository contains a Python tool to assess cybersecurity risk for organizations based on real-world Internet exposure.
+# Shodan-Based Risk Exposure Framework (REF)
+
+A Python tool to assess cybersecurity risk for organizations based on real-world Internet exposure.  
 It integrates Shodan scans and Vulners exploit data to calculate Exposure (E), Likelihood (L), and Risk (R) scores.
 
-Features
-Queries Shodan for exposed IPs and services.
+---
 
-Extracts vulnerabilities (CVEs) and enriches them using Vulners API.
+## What Is REF and Why It’s Useful
 
-Calculates Exposure based on open ports and vulnerabilities.
+REF (Risk Exposure Framework) is designed to give security researchers and space-sector engineers a clear, quantitative view of an organization’s external attack surface. By combining data from Shodan (to find exposed IPs, open ports, and associated CVEs) with exploit-availability information from the Vulners API, REF computes three core metrics:  
 
-Calculates Likelihood based on adversary interest, exploit availability, and vulnerability severity.
+- **Exposure (E):** How widespread and severe the vulnerabilities are, based on open vulnerable ports and CVE counts.  
+- **Likelihood (L):** The probability of an attack succeeding, driven by adversary interest, available exploits, and CVSS severity.  
+- **Risk (R):** A normalized score that fuses Exposure and Likelihood into a single, actionable number.
 
-Outputs risk scores and highlights critical findings.
+REF is particularly useful for:  
+- Identifying high-risk hosts and services in real time.  
+- Prioritizing patching and mitigation efforts.  
+- Benchmarking an organization’s cybersecurity posture over time.  
+- Supporting space-sector stakeholders in managing their unique threat landscape.
 
-How It Works
-Fetch data from Shodan using a specified organization or query.
+---
 
-Extract open ports, services, and CVEs.
+## Features
 
-Query Vulners to check exploit availability for each CVE.
+- **Shodan Integration:** Automatically query Shodan for all IPs under a given organization (or custom query).  
+- **Vulnerability Extraction:** Parse CVEs from Shodan’s host data and calculate counts of open vulnerable ports.  
+- **Vulners Enrichment:** For each CVE, determine exploit availability via the Vulners API (multithreaded fetch).  
+- **Exposure Calculation:**  
+  \[
+    E \;=\;\Bigl(\sum_{\text{each IP}} \bigl(\text{OpenVulnPorts} \times \text{NumOfVulns}\bigr)\Bigr)\;\times\;\text{(total vulnerable IPs)}
+  \]
+- **Likelihood Calculation:**  
+  \[
+    L \;=\; \text{adversary interest} \;\times\; \bigl(\text{exploit availability} + \text{average CVSS}\bigr)
+  \]
+- **Risk Scoring:**  
+  \[
+    R_{\text{raw}} = c \times E + (1 - c) \times L,\quad
+    R_{\text{scaled}} = \log_2(1 + R_{\text{raw}})
+  \]
+- **Structured Output:** Summarizes total exposed/vulnerable IPs, unique CVEs, exploit counts, individual host rankings, and top CPEs.  
+- **Configurable:** Easily adjust weighting (c-weight) or scan filters to tailor to different operational needs.
 
-Compute:
+---
 
-Exposure (E) = Number of vulnerable ports × Number of vulnerabilities × Number of vulnerable IPs.
+## Requirements
 
-Likelihood (L) = Adversary interest × (Exploits + VSI).
+- **Python 3.8+**  
+- **Shodan API Key**  
+- **Vulners API Key**  
 
-Risk (R) = Combination of E and L using an adjustable formula.
+### Python Libraries
 
-Export results in a structured report.
+- `shodan`
+- `vulners`
+- `pandas`
+- `requests`
+- `concurrent.futures` (standard library)
+- `collections` (standard library)
+- `math` (standard library)
 
-Requirements
-Python 3.8+
+---
 
-Shodan API key
 
-Vulners API key
-
-Libraries: requests, pandas, shodan, math
-
-Disclaimer:
-This tool is intended for cybersecurity research and space-sector risk analysis.
-Always ensure you have proper authorization to scan and assess external systems.

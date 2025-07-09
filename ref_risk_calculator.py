@@ -5,8 +5,8 @@ import concurrent.futures
 from collections import Counter
 import math
 
-VULNERS_API_KEY = "LNLSZ1BD0RC3759P4OQORKYVYG0UY2YCJUSF75MO4PL8LYCJXTAZIL31C60WY04C"
-SHODAN_API_KEY = "TIH2vcAVn8hj3zAVXYdhkHNQEZJy3KxW"
+VULNERS_API_KEY = "VulnersAPIkey"
+SHODAN_API_KEY = "ShodanAPIkey"
 
 def get_shodan_data(shodan_api, query):
     try:

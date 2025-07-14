@@ -1,0 +1,110 @@
+import math
+import pandas as pd
+import matplotlib.pyplot as plt
+from pathlib import Path
+
+def exposure(nv_per_ip: int, vuln_ips: int, total_ips: int) -> int:
+    """
+    𝑬 = ( Σ_i v(i) ) · |IP|
+       = (nv_per_ip · vuln_ips) · total_ips
+    """
+    return (nv_per_ip * vuln_ips) * total_ips
+
+
+def risk(expo: int, L: int, c: float = 0.5):
+    raw = c * expo + (1 - c) * L
+    scaled = math.log2(1 + raw) if raw > 0 else 0
+    return raw, scaled
+
+
+# ----------------------------------------------------------------------
+#  Synthetic validation data
+# ----------------------------------------------------------------------
+def make_validation_df() -> pd.DataFrame:
+    rows = []
+
+    # ── Scenario A : vary Nv, hold |IP| = vuln_IPs = 5 ──
+    for nv in range(10, 101, 10):
+        E = exposure(nv_per_ip=nv, vuln_ips=5, total_ips=5)
+        r_raw, r_avg = risk(E, L := 5)
+        rows.append(dict(Scenario='A_NumOfVulns',
+                         Nv=nv, VulnIPs=5, TotalIPs=5, L=L,
+                         Exposure=E, RiskRaw=r_raw, RiskAvg=r_avg))
+
+    # ── Scenario B : vary |IP| (= vuln-IPs) ──
+    for vip in range(10, 101, 10):
+        E = exposure(nv_per_ip=10, vuln_ips=vip, total_ips=vip)
+        r_raw, r_avg = risk(E, L := 5)
+        rows.append(dict(Scenario='B_TotalVulnIPs',
+                         Nv=10, VulnIPs=vip, TotalIPs=vip, L=L,
+                         Exposure=E, RiskRaw=r_raw, RiskAvg=r_avg))
+
+    # ── Scenario C : vary Likelihood with E fixed = 500 ──
+    fixed_E = exposure(10, 5, 10)                               # = 500
+    for L in range(1, 16):
+        r_raw, r_avg = risk(fixed_E, L)
+        rows.append(dict(Scenario='C_VaryL',
+                         Nv=10, VulnIPs=5, TotalIPs=10, L=L,
+                         Exposure=fixed_E, RiskRaw=r_raw, RiskAvg=r_avg))
+
+    return pd.DataFrame(rows)
+
+
+def save_line(df, x, y, title, xlabel, ylabel, fname, color='b', marker='o'):
+    plt.figure(figsize=(6, 4))
+    plt.plot(df[x], df[y], marker=marker, color=color, ls='--')
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.grid(True)
+    plt.savefig(fname, dpi=200, bbox_inches='tight')
+    print(f"[saved] {fname}")
+    plt.close()
+
+
+def plot_all(df: pd.DataFrame):
+    save_line(df[df.Scenario == 'A_NumOfVulns'].sort_values('Nv'),
+              'Nv', 'Exposure',
+              'Scenario A: Exposure vs. Nv  (|IP| = 5)',
+              'Average vulns per IP (Nv)', 'Exposure',
+              'A_NumOfVulns_Nv_vs_Exposure.png', marker='s', color='g')
+
+    save_line(df[df.Scenario == 'B_TotalVulnIPs'].sort_values('VulnIPs'),
+              'VulnIPs', 'Exposure',
+              'Scenario B: Exposure vs. Total Vuln IPs',
+              'Number of vulnerable IPs (= |IP|)', 'Exposure',
+              'B_TotalVulnIPs_VulnIPs_vs_Exposure.png', marker='^', color='r')
+
+    save_line(df[df.Scenario == 'C_VaryL'].sort_values('L'),
+              'L', 'RiskRaw',
+              'Scenario C: RiskRaw vs. Likelihood  (E fixed = 500)',
+              'Likelihood L', 'RiskRaw',
+              'C_VaryL_L_vs_RiskRaw.png')
+
+    
+    plt.figure(figsize=(6, 4))
+    for scn, mk, col in [('A_NumOfVulns', 's', 'g'),
+                         ('B_TotalVulnIPs', '^', 'r')]:
+        sub = df[df.Scenario == scn].sort_values('Exposure')
+        plt.plot(sub['Exposure'], sub['RiskRaw'],
+                 marker=mk, ls='--', color=col, label=scn)
+    plt.title('RiskRaw vs. Exposure (Scenarios A & B, L = 5)')
+    plt.xlabel('Exposure')
+    plt.ylabel('RiskRaw')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('RiskRaw_vs_Exposure_AB.png', dpi=200, bbox_inches='tight')
+    print('[saved] RiskRaw_vs_Exposure_AB.png')
+    plt.close()
+
+
+# ----------------------------------------------------------------------
+if __name__ == "__main__":
+    df_val = make_validation_df()
+
+    print(df_val.head(10).to_string(index=False))
+    csv_out = Path('ref_validation_dataset.csv')
+    df_val.to_csv(csv_out, index=False)
+    print(f'[saved] {csv_out.resolve()}')
+
+    plot_all(df_val)

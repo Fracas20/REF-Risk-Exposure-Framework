@@ -1,0 +1,147 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import math
+import pandas as pd
+
+# ===========================================================
+# Risk Exposure Framework (REF) – Tornado Analysis
+# ===========================================================
+
+def calculate_vsi(avg_cvss):
+    """Vulnerability Severity Impact (VSI) based on average CVSS."""
+    if avg_cvss < 5.0:
+        return 1
+    elif 5.0 <= avg_cvss <= 8.0:
+        return 3
+    else:
+        return 5
+
+def calculate_ref_risk_dynamic(total_exposed_ips, total_vuln_ips,
+                               total_cves, total_exploits,
+                               avg_cvss, adv_interest):
+    """
+    Compute REF risk dynamically so exposure scales with dataset magnitudes.
+    """
+    # Exposure approximates average vulnerabilities per IP, scaled by CVE density
+    exposure_score = (total_vuln_ips * (total_cves / max(total_exposed_ips, 1)))
+
+    vsi = calculate_vsi(avg_cvss)
+    ea = total_exploits / total_cves if total_cves > 0 else 0
+    likelihood = adv_interest * (ea + vsi)
+
+    risk_raw = 0.5 * exposure_score + 0.5 * likelihood
+    risk_scaled = math.log2(1 + risk_raw) if risk_raw > 0 else 0
+
+    return {
+        'exposure': exposure_score,
+        'ea': ea,
+        'vsi': vsi,
+        'likelihood': likelihood,
+        'risk_raw': risk_raw,
+        'risk_scaled': risk_scaled
+    }
+
+def tornado_analysis(base_params, param_ranges, param_names):
+    """Run tornado sensitivity analysis."""
+    base_result = calculate_ref_risk_dynamic(**base_params)
+    base_risk = base_result['risk_scaled']
+    results = []
+
+    for pname in param_names:
+        p_low = base_params.copy()
+        p_high = base_params.copy()
+        p_low[pname] = param_ranges[pname]['low']
+        p_high[pname] = param_ranges[pname]['high']
+
+        r_low = calculate_ref_risk_dynamic(**p_low)['risk_scaled']
+        r_high = calculate_ref_risk_dynamic(**p_high)['risk_scaled']
+
+        results.append({
+            'param': pname,
+            'low': r_low,
+            'high': r_high,
+            'range': abs(r_high - r_low),
+            'base': base_risk
+        })
+
+    results.sort(key=lambda x: x['range'], reverse=True)
+    return base_risk, results, base_result
+
+# --- Company data (Table 3) ---
+companies = {
+    "Company1": {'total_exposed_ips': 1253, 'total_vuln_ips': 269, 'total_cves': 233,
+                 'total_exploits': 380, 'avg_cvss': 6.87, 'adv_interest': 1},
+    "Company2": {'total_exposed_ips': 1042, 'total_vuln_ips': 73, 'total_cves': 699,
+                 'total_exploits': 717, 'avg_cvss': 6.77, 'adv_interest': 1},
+    "Company3": {'total_exposed_ips': 25537, 'total_vuln_ips': 881, 'total_cves': 572,
+                 'total_exploits': 662, 'avg_cvss': 7.08, 'adv_interest': 1},
+    "Company4": {'total_exposed_ips': 62598, 'total_vuln_ips': 2533, 'total_cves': 560,
+                 'total_exploits': 671, 'avg_cvss': 6.84, 'adv_interest': 1},
+    "Company6": {'total_exposed_ips': 44, 'total_vuln_ips': 15, 'total_cves': 70,
+                 'total_exploits': 101, 'avg_cvss': 7.07, 'adv_interest': 1},
+    "Company7": {'total_exposed_ips': 5420, 'total_vuln_ips': 125, 'total_cves': 810,
+                 'total_exploits': 784, 'avg_cvss': 6.67, 'adv_interest': 1},
+    "Company8": {'total_exposed_ips': 2000, 'total_vuln_ips': 34, 'total_cves': 725,
+                 'total_exploits': 590, 'avg_cvss': 7.03, 'adv_interest': 1}
+}
+
+def build_ranges(base):
+    return {
+        'total_exposed_ips': {'low': int(base['total_exposed_ips'] * 0.5),
+                              'high': int(base['total_exposed_ips'] * 1.5)},
+        'total_vuln_ips': {'low': int(base['total_vuln_ips'] * 0.5),
+                           'high': int(base['total_vuln_ips'] * 1.5)},
+        'total_cves': {'low': int(base['total_cves'] * 0.6),
+                       'high': int(base['total_cves'] * 1.4)},
+        'total_exploits': {'low': int(base['total_exploits'] * 0.7),
+                           'high': int(base['total_exploits'] * 1.3)},
+        'avg_cvss': {'low': 5.0, 'high': 9.0},
+        'adv_interest': {'low': 1, 'high': 3}
+    }
+
+param_names = ['total_exposed_ips', 'total_vuln_ips', 'total_cves',
+               'total_exploits', 'avg_cvss', 'adv_interest']
+
+param_labels = {
+    'total_exposed_ips': 'Total Exposed IPs',
+    'total_vuln_ips': 'Total Vulnerable IPs',
+    'total_cves': 'Total CVE Count',
+    'total_exploits': 'Total Exploits Available',
+    'avg_cvss': 'Average CVSS Score',
+    'adv_interest': 'Adversary Interest (A)'
+}
+
+# --- Generate Tornado Plots ---
+for cname, base in companies.items():
+    pranges = build_ranges(base)
+    base_risk, results, base_result = tornado_analysis(base, pranges, param_names)
+
+    print(f"\n{'='*60}")
+    print(f"{cname} – Base Case Analysis")
+    print(f"{'='*60}")
+    for k, v in base_result.items():
+        print(f"{k:20s}: {v:.2f}")
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    y_pos = np.arange(len(results))
+    colors = plt.cm.RdYlGn_r(np.linspace(0.3, 0.7, len(results)))
+
+    for i, r in enumerate(results):
+        low, high = r['low'], r['high']
+        left, width = min(low, high), abs(high - low)
+        ax.barh(i, width, left=left, color=colors[i], edgecolor='black', alpha=0.8)
+        ax.text(left - 0.05, i, f'{left:.2f}', ha='right', va='center', fontsize=9)
+        ax.text(left + width + 0.05, i, f'{left + width:.2f}', ha='left', va='center', fontsize=9)
+
+    ax.axvline(base_risk, color='red', linestyle='--', linewidth=2, label=f'Base R = {base_risk:.2f}')
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels([param_labels[r['param']] for r in results], fontsize=10)
+    ax.set_xlabel('Overall Risk Score (R)')
+    ax.set_title(f'Tornado Diagram – Sensitivity Analysis: {cname}', fontsize=13, fontweight='bold')
+    ax.legend(fontsize=9)
+    ax.grid(axis='x', linestyle=':', alpha=0.4)
+    plt.tight_layout()
+    plt.savefig(f'tornado_{cname.lower()}_fixed.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+print("Tornado diagrams generated (fixed exposure scaling).")
